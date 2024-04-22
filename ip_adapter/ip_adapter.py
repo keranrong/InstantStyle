@@ -1,4 +1,4 @@
-import os
+   import os
 from typing import List
 
 import torch
@@ -91,6 +91,36 @@ class IPAdapter:
             clip_extra_context_tokens=self.num_tokens,
         ).to(self.device, dtype=torch.float16)
         return image_proj_model
+
+    def to_device(self, device):
+        """Move all model components to the specified device."""
+        # Move the pipeline and its sub-components
+        if hasattr(self, 'pipe'):
+            self.pipe = self.pipe.to(device)
+
+        # Move the image encoder to the specified device
+        if hasattr(self, 'image_encoder'):
+            self.image_encoder = self.image_encoder.to(device)
+
+        # Move the image projection model to the specified device
+        if hasattr(self, 'image_proj_model'):
+            self.image_proj_model = self.image_proj_model.to(device, dtype=torch.float16)
+
+        # Update the device attention processors within the UNet architecture if applicable
+        if hasattr(self.pipe, 'unet') and hasattr(self.pipe.unet, 'attn_processors'):
+            for processor in self.pipe.unet.attn_processors.values():
+                processor.to(device)
+
+        # Handle ControlNet if present in the pipeline
+        if hasattr(self.pipe, 'controlnet'):
+            if isinstance(self.pipe.controlnet, MultiControlNetModel):
+                for controlnet in self.pipe.controlnet.nets:
+                    controlnet.to(device)
+            else:
+                self.pipe.controlnet.to(device)
+
+        # Update the internal device reference
+        self.device = device
 
     def set_ip_adapter(self):
         unet = self.pipe.unet
